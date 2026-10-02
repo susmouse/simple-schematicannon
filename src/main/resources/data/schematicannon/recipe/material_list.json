@@ -7,9 +7,9 @@
     "P": "minecraft:paper"
   },
   "pattern": [
-    "PPB",
-    "PPB",
-    "PPB"
+    "PBP",
+    "PBP",
+    "PBP"
   ],
   "result": {
     "id": "schematicannon:material_list"

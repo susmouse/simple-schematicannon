@@ -1,11 +1,12 @@
 {
-  "type": "minecraft:crafting_shapeless",
+  "type": "minecraft:crafting_shaped",
   "category": "equipment",
   "group": "schematicannon",
-  "ingredients": [
-    "minecraft:iron_ingot",
-    "minecraft:lapis_lazuli"
-  ],
+  "key": {
+    "I": "minecraft:iron_ingot",
+    "L": "minecraft:lapis_lazuli"
+  },
+  "pattern": ["  I", " L "],
   "result": {
     "id": "schematicannon:schematic_and_quill"
   }

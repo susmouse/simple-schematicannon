@@ -8,9 +8,9 @@
     "R": "minecraft:redstone_block"
   },
   "pattern": [
-    "LRL",
     "C C",
-    "CCC"
+    "CRC",
+    "LCL"
   ],
   "result": {
     "id": "schematicannon:schematicannon"

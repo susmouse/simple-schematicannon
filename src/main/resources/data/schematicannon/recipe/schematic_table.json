@@ -8,9 +8,9 @@
     "P": "#minecraft:planks"
   },
   "pattern": [
-    "SSP",
-    "SSP",
-    "  W"
+    "PWP",
+    "S S",
+    "S S"
   ],
   "result": {
     "id": "schematicannon:schematic_table"
