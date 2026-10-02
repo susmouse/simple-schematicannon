@@ -1,0 +1,48 @@
+plugins {
+    id 'java-library'
+    id 'net.neoforged.moddev' version '2.0.148'
+}
+
+base.archivesName = 'schematicannon'
+version = project.mod_version
+group = project.mod_group
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(25)
+    }
+    withSourcesJar()
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+}
+
+neoForge {
+    version = project.neoforge_version
+    validateAccessTransformers = true
+
+    runs {
+        client {
+            client()
+            // Auto-enter a named world when one is passed via -PquickPlay=<name>;
+            // handy for scripted smoke tests, harmless otherwise.
+            if (project.hasProperty('quickPlay')) {
+                programArguments.addAll('--quickPlaySingleplayer', project.property('quickPlay').toString())
+            }
+        }
+        server {
+            server()
+        }
+    }
+
+    mods {
+        schematicannon {
+            sourceSet sourceSets.main
+        }
+    }
+}
+
+repositories {
+    mavenCentral()
+}

@@ -1,0 +1,27 @@
+modLoader = "javafml"
+loaderVersion = "[4,)"
+license = "MIT"
+issueTrackerURL = ""
+
+[[mods]]
+modId = "schematicannon"
+version = "1.0.0"
+displayName = "Schematicannon"
+authors = "WorkBuddy"
+description = '''
+A single-block Schematicannon inspired by Create: loads .nbt schematics and prints them block by block.
+'''
+
+[[dependencies.schematicannon]]
+    modId = "neoforge"
+    type = "required"
+    versionRange = "[26.1.2,)"
+    ordering = "NONE"
+    side = "BOTH"
+
+[[dependencies.schematicannon]]
+    modId = "minecraft"
+    type = "required"
+    versionRange = "[26.1.2,)"
+    ordering = "NONE"
+    side = "BOTH"
