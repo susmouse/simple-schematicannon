@@ -87,7 +87,12 @@ tools/*-files.txt
 tools/pc-all.txt
 
 # ===========================================================================
-# 打包产物（跑 tools/pack.sh 会生成，不入库）
+# 打包产物（跑 tools/pack.sh 或 tools/pack.ps1 会生成，不入库）
 # ===========================================================================
 schematicannon-*.jar
 textures_sheet.png
+model_preview.png
+
+# Python 字节码缓存（tools/ 下的脚本被 import 时会生成）
+__pycache__/
+*.pyc

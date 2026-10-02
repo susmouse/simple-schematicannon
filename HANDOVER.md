@@ -546,40 +546,75 @@ jar xf ~/.gradle/caches/neoformruntime/artifacts/minecraft_26.1.2_client.jar \
 
 | 文件 | 用途 |
 | --- | --- |
-| **`pack.sh`** | **主入口**：材质更新后的完整打包流程（校验 → 预览 → 编译 → 校验 jar） |
-| `tex_preview.py` | 贴图拼版预览，输出 `textures_sheet.png`（10 倍放大 + 棋盘底衬，缺图会画红块标注） |
+| **`pack.ps1`** | **Windows 主入口**：Windows PowerShell 5.1 版打包流程，与 `pack.sh` 功能等价 |
+| **`pack.sh`** | **Git Bash / WSL 主入口**：打包流程（校验 → 预览 → 编译 → 校验 jar） |
+| `_verify_cannon_model.py` | **模型静态校验**：JSON 可解析、旋转角是 22.5 倍数、旋转后 AABB 在 `[0..16]`、贴图变量可解析。被两个打包脚本共用 |
+| `_render_white.py` | 白底等轴测模型渲染，输出 `model_preview.png`（复用 `model_preview.py` 的投影与着色） |
+| `model_preview.py` | 等轴测模型渲染器（平均色着色），`build_quads` / `project` / `shade` 供上面复用 |
+| `tex_preview.py` | 贴图拼版预览，输出 `textures_sheet.png`（放大 + 棋盘底衬，缺图会画红块标注） |
 | `transformcheck2.py` | **打印朝向的权威自检脚本**。原样复刻原版 `StructureTemplate.transform` / `getZeroPositionWithTransform`，独立复现新版 Java 逻辑并全矩阵比对。改 `SchematicTransform` 后必跑 |
 | `vanillacmp.py` | 复盘脚本：把**旧实现**与原版逐格对比，记录 bug 证据（16 个镜像配置全错、非镜像 159 格出界）。仅作历史参考 |
 | `transformcheck.py` | **已过时**。验证的是被删掉的旧公式，不要再用它判断正确性 |
+| `_gen_cannon_model_textures.py` | 现役炮身贴图的程序化生成器（含 `schematicannon_metal_ring.png` 亮钢环箍） |
 | `create/` | Create 本体的参考源码（`SchematicItem.java` / `SchematicPrinter.java` / `SchematicannonBlockEntity.java`），**只作实现参考，不参与编译** |
 | `CORE-SPEC.md` / `VENDOR-SPEC.md` | 早期移植时整理的核心 / 第三方 API 规格笔记 |
 | `portcheck.sh` / `portcheck-all.sh` / `portfilter.sh` | 移植期用于批量筛查 API 差异的脚本（历史遗留，基本用不上了） |
 | `migrate_forge.py` / `migrate_pass2.py` / `make_clusters.py` | 移植期的批量改写脚本（同上，历史遗留） |
 | `errstats.py` / `errdetail.py` | 解析 gradle 编译错误输出、聚类统错（排查大批 API 报错时很好用） |
 
-### 5.2 `pack.sh` 用法
+### 5.2 打包脚本用法
 
-```bash
-bash tools/pack.sh              # 四步全做
-bash tools/pack.sh --quick      # 跳过贴图预览
-bash tools/pack.sh --preview    # 只出贴图预览（画贴图时快速看效果）
-bash tools/pack.sh --check      # 只做贴图校验 + 预览，不编译
+两套脚本功能等价，按终端环境选：
+
+| 环境 | 脚本 |
+| --- | --- |
+| Windows PowerShell（Windows 上原生，推荐） | `tools\pack.ps1` |
+| Git Bash / WSL | `tools/pack.sh` |
+
+**PowerShell 版：**
+
+```powershell
+.\tools\pack.ps1                    # 五阶段全做
+.\tools\pack.ps1 -Check             # 只做校验（模型 + 贴图），不编译
+.\tools\pack.ps1 -Quick             # 跳过预览图生成
+.\tools\pack.ps1 -Preview           # 只出预览图
+.\tools\pack.ps1 -Dist D:\some\dir  # 打完顺便复制到该目录
+.\tools\pack.ps1 -Online            # 联网解析依赖（默认离线）
+.\tools\pack.ps1 -NoVerify          # 跳过 jar 内容比对
 ```
 
-四步依次是：
+**Git Bash 版：** 对应 `--check` / `--quick` / `--preview` / `--dist DIR` / `--online` / `--no-verify`。
 
-1. **校验贴图** —— 每张必须是 16×16 合法 PNG；模型里引用的贴图必须存在；列出没被任何模型引用的孤儿贴图（重命名后最容易漏）。
-2. **生成预览** —— 调 `tools/tex_preview.py` 出 `textures_sheet.png`。
-3. **编译打包** —— `gradlew jar`，产物复制到仓库根 `schematicannon-1.0.0.jar`。
-4. **校验字节** —— 逐张比对 jar 内与磁盘上的贴图大小，确认打进去的是最新素材（防 gradle 增量缓存没刷新）。
+五阶段依次是：
 
-脚本内的路径常量（改目录结构时同步改）：
+1. **校验模型** —— JSON 可解析；每个 element 旋转后的 AABB 仍在 `[0..16]`；旋转角必须是 **22.5 的倍数**；贴图变量能解析到真实文件（委派给 `_verify_cannon_model.py`）。
+2. **校验贴图** —— 每张必须是 16×16 合法 PNG；模型里引用的贴图必须存在；列出没被任何模型引用的孤儿贴图（重命名后最容易漏）。引用解析必须走 **JSON 解析**（`#var` → 顶层 `textures` → 路径），不能用正则扫 `"texture": "schematicannon:..."`，否则找不到。
+3. **生成预览** —— 调 `tools/tex_preview.py` 出 `textures_sheet.png`、`_render_white.py` 出 `model_preview.png`。
+4. **编译打包** —— `gradlew jar`，产物复制到仓库根 `schematicannon-1.0.0.jar`。
+5. **校验 jar** —— 逐张比对 jar 内与磁盘上的贴图大小，并比对模型 JSON 的 md5，确认打进去的是最新素材（防 gradle 增量缓存没刷新）。
+
+> **退出码陷阱（两套脚本都处理了）**：`gradlew ... | tail -8` 会让管道的退出码变成 `tail` 的，必须用 `${PIPESTATUS[0]}` 取真实状态。PowerShell 侧同理不能用管道吞 `$LASTEXITCODE`。
+
+**`pack.ps1` 的路径与编码常量（改目录结构时同步改）：**
+
+```powershell
+$ProjRoot = Split-Path -Parent $PSScriptRoot   # tools\ 的上一层
+$Assets   = Join-Path $ModDir 'src\main\resources\assets\schematicannon'
+$env:PYTHONIOENCODING = 'utf-8'                # 否则中文输出乱码
+[Console]::OutputEncoding = New-Object System.Text.UTF8Encoding($false)
+```
+
+> `pack.ps1` **必须保存为 UTF-8 with BOM**。Windows PowerShell 5.1 会按 ANSI（GBK）
+> 解析无 BOM 的脚本，中文注释全乱码，还会连带报出假的引号不匹配语法错误
+> （`MissingOpenParenthesisInIfStatement`），极难排查 —— 看起来是语法问题，其实是编码问题。
+
+**`pack.sh` 的路径常量：**
 
 ```bash
 PROJ_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 MOD_DIR="$PROJ_ROOT"                          # mod 工程就在仓库根
 ASSETS="$MOD_DIR/src/main/resources/assets/schematicannon"
-JAR_OUT="$PROJ_ROOT/schematicannon-1.0.0.jar"
+JAR_OUT="$PROJ_ROOT/schematicannon-1.0.0.jar"  # 版本号从 gradle.properties 读
 JAVA_HOME_WIN="${JAVA_HOME:-/d/installation/jdk21}"
 ```
 

@@ -449,37 +449,80 @@ cd schematicannon
 ./gradlew runServer    # 起一个测试服务端验证加载
 ```
 
-### 更新材质后怎么打包
+### 改完模型 / 材质后怎么打包
 
-用仓库根的打包脚本 `_tools/pack.sh`（Git Bash / WSL 下执行）：
+仓库有两套等价的打包脚本，功能完全一致，按你的终端环境选一个：
 
-```
-bash _tools/pack.sh              # 校验贴图 -> 生成预览 -> 编译出 jar -> 校验 jar 内容
-bash _tools/pack.sh --quick      # 同上，但跳过预览生成
-bash _tools/pack.sh --preview    # 只出贴图预览，不编译（画贴图时快速看效果）
-bash _tools/pack.sh --check      # 只做贴图校验 + 预览，不编译
-```
-
-脚本会依次做四件事：
-
-1. **校验贴图** —— 每张必须是 **16×16** 的真彩色 PNG；模型里引用的贴图必须存在；顺手列出没被任何模型引用的孤儿文件（贴图重命名后最容易漏这一步）。
-2. **生成预览** —— 输出 `textures_sheet.png`（10 倍放大拼版），按方块朝向排布，不用进游戏就能看效果。
-3. **编译打包** —— 跑 `gradlew jar`，把产物复制成项目根的 `schematicannon-1.0.0.jar`。
-4. **校验 jar** —— 逐张比对 jar 内与磁盘上的贴图字节数，确认打进去的确实是最新素材（防止 gradle 缓存没刷新）。
-
-贴图只需要放进 `schematicannon/src/main/resources/assets/schematicannon/textures/{block,item}/`，不用改代码。
-
-各面贴图与模型槽位的对应关系：
-
-| 贴图 | 用在模型的 |
+| 环境 | 脚本 |
 | --- | --- |
-| `block/schematicannon_top` | `up`（炮顶盖） |
-| `block/schematicannon_bottom` | `down`（底四角的螺栓面） |
-| `block/schematicannon_left_right` | `east` / `west`（左右侧面，圆形齿轮口） |
-| `block/schematicannon_front_behind` | `north` / `south`（前后正面 + 背后） |
+| Windows PowerShell（推荐，Windows 上原生） | `tools\pack.ps1` |
+| Git Bash / WSL | `tools/pack.sh` |
+
+**PowerShell 版：**
+
+```powershell
+.\tools\pack.ps1                              # 五阶段完整流程
+.\tools\pack.ps1 -Check                       # 只做校验，不编译（改完模型先跑这个，秒级）
+.\tools\pack.ps1 -Quick                       # 跳过预览图生成
+.\tools\pack.ps1 -Preview                     # 只出预览图
+.\tools\pack.ps1 -Dist D:\some\dir            # 打完顺便复制到该目录
+.\tools\pack.ps1 -Online                      # 联网解析依赖（默认离线）
+.\tools\pack.ps1 -NoVerify                    # 跳过 jar 内容比对
+```
+
+> 若提示「禁止运行脚本」，用
+> `powershell -ExecutionPolicy Bypass -File tools\pack.ps1`
+> 或先执行 `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`。
+
+**Git Bash 版：** 把上面的 `-Check` / `-Quick` / `-Preview` 换成 `--check` /
+`--quick` / `--preview`，`-Dist D:\some\dir` 换成 `--dist /d/some/dir`。
+
+两个脚本都从 `gradle.properties` 的 `mod_version` 读取版本号，jar 名自动拼成
+`schematicannon-1.0.0.jar`。
+
+脚本依次做五件事（任一失败即中止，退出码非零）：
+
+1. **校验模型** —— JSON 可解析；每个 `element` 旋转后的 AABB 仍在 `[0..16]`；
+   旋转角必须是 **22.5 的倍数**；贴图变量能解析到真实文件。
+2. **校验贴图** —— 每张必须是 **16×16** 的真彩色 PNG；模型里引用的贴图必须存在；
+   顺手列出没被任何模型引用的孤儿文件（贴图重命名后最容易漏这一步）。
+3. **生成预览** —— `textures_sheet.png`（贴图拼版）和 `model_preview.png`
+   （白底等轴测渲染），不用进游戏就能看效果。
+4. **编译打包** —— 跑 `gradlew jar`，把产物复制成仓库根的 `schematicannon-1.0.0.jar`。
+5. **校验 jar** —— 逐张比对 jar 内与磁盘上的贴图字节数，并比对模型 JSON 的 md5，
+   确认打进去的确实是最新素材（防止 gradle 缓存没刷新）。
+
+> **Windows 上改 `pack.ps1` 的注意事项**：文件必须保存为 **UTF-8 with BOM**。
+> Windows PowerShell 5.1 会按 ANSI（GBK）代码页解析没有 BOM 的脚本，
+> 中文注释全部变乱码，还会连带报出一堆假的引号不匹配语法错误。
+
+贴图只需要放进 `src/main/resources/assets/schematicannon/textures/{block,item}/`，不用改代码。
+
+模型各面与贴图变量的对应关系：
+
+| 材质变量 | 贴图 | 用在 |
+| --- | --- | --- |
+| `#stone` | `block/schematicannon_stone` | `base` 底座（单层） |
+| `#wood` / `#wood_side` | `block/schematicannon_wood` / `_wood_side` | `deck` / `bed` 木台 |
+| `#metal` | `block/schematicannon_metal` | `barrel_core` 炮管主体 |
+| `#shaft` | `block/schematicannon_metal_shaft` | `muzzle` / `breech` 炮口与炮尾 |
+| `#ring` | `block/schematicannon_metal_ring` | `ring_1..4` 四道外凸环箍（亮钢色） |
+| `#accent` | `block/schematicannon_left_right` | `axle_west` / `axle_east` 轮轴 |
+| `#particle` | `block/schematicannon_wood_side` | 破坏粒子 |
+
+未再被引用的遗留贴图：`block/schematicannon_top`、`block/schematicannon_bottom`、
+`block/schematicannon_front_behind`（旧方块模型专用）。打包时脚本会把它们列出来提醒。
+
+其余贴图：
+
+| 贴图 | 用在 |
+| --- | --- |
 | `block/schematic_table_top` | 蓝图桌顶面（图纸 + 羽毛笔） |
 | `block/schematic_table_side` | 蓝图桌其余五面 |
 | `item/material_list`、`item/schematic_and_quill` | 两个道具图标 |
+
+> 贴图绘制注意：**方块面贴图不要描 1px 深色边框**。那是道具图标的画法，
+> 方块面是平铺的，边框会变成一格一格的深色接缝。
 
 另外 `schematicannon/gen_textures.py` 是**最初那套贴图的程序化生成器**（Python 3 + zlib，无第三方依赖）。现在贴图已经手工精修过，**这个脚本不要再跑**，否则会覆盖掉手改的素材；留着只是记录初始素材怎么来的。
 
