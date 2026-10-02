@@ -366,7 +366,16 @@ public final class ModNetwork {
             if (!Files.isRegularFile(file)) {
                 return new LoadResult(null, "missing");
             }
-            return new LoadResult(Schematic.load(file, lookup), null);
+            Schematic parsed = Schematic.load(file, lookup);
+            if (parsed.blockCount() == 0) {
+                // 文件合法但一个方块都没解析出来 —— 多半是 blocks[].pos / blocks[].state
+                // 用了我们没认出来的标签类型。明确报错，不要静默地"载入 0 个方块"。
+                SchematicannonMod.LOGGER.warn(
+                        "Schematic '{}' parsed to 0 blocks (size={}x{}x{}); unsupported or empty NBT layout?",
+                        name, parsed.sizeX(), parsed.sizeY(), parsed.sizeZ());
+                return new LoadResult(null, "empty");
+            }
+            return new LoadResult(parsed, null);
         } catch (Exception e) {
             SchematicannonMod.LOGGER.warn("Failed to load schematic '{}': {}", name, e.toString());
             return new LoadResult(null, "invalid");

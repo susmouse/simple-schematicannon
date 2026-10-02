@@ -79,11 +79,20 @@ public class Schematic {
 
         for (int i = 0; i < blockList.size(); i++) {
             CompoundTag tag = blockList.getCompoundOrEmpty(i);
-            int[] pos = tag.getIntArray("pos").orElse(null);
-            if (pos == null || pos.length < 3) {
+
+            // "pos" 有两种写法，必须都认：
+            //   TAG_Int_Array  —— 我们自己 capture() 写的，以及大多数编辑器
+            //   TAG_List<Int>  —— 原版结构方块导出 / 各种网页转换工具
+            // getIntArray() 只认前者，对后者返回 Optional.empty()，所以不能只用它。
+            int[] pos = readIntTriple(tag, "pos");
+            if (pos == null) {
                 continue;
             }
 
+            // "state" 也有两种写法：
+            //   TAG_Compound —— Create / Schematica 风格，内联完整方块状态
+            //   TAG_Int      —— 原版结构方块风格，palette 索引
+            // 注意 getCompound() 对 IntTag 返回 empty，正好落到 palette 分支。
             BlockState state = null;
             CompoundTag stateTag = tag.getCompound("state").orElse(null);
             if (stateTag != null) {
@@ -216,6 +225,24 @@ public class Schematic {
         return name;
     }
 
+    /**
+     * Reads a 3-element integer field that may be written either as {@code TAG_Int_Array}
+     * (our own {@link #capture}) or as {@code TAG_List<TAG_Int>} (vanilla structure blocks and
+     * most web based converters). Returns {@code null} when the field is missing or too short.
+     */
+    @Nullable
+    private static int[] readIntTriple(CompoundTag tag, String key) {
+        int[] direct = tag.getIntArray(key).orElse(null);
+        if (direct != null && direct.length >= 3) {
+            return new int[]{direct[0], direct[1], direct[2]};
+        }
+        ListTag list = tag.getList(key).orElse(null);
+        if (list != null && list.size() >= 3) {
+            return new int[]{list.getIntOr(0, 0), list.getIntOr(1, 0), list.getIntOr(2, 0)};
+        }
+        return null;
+    }
+
     private static BlockState readState(HolderGetter<Block> lookup, CompoundTag tag) {
         try {
             return NbtUtils.readBlockState(lookup, tag);
@@ -225,15 +252,8 @@ public class Schematic {
     }
 
     private static int[] readSize(CompoundTag root) {
-        int[] s = root.getIntArray("size").orElse(null);
-        if (s != null && s.length >= 3) {
-            return new int[]{s[0], s[1], s[2]};
-        }
-        ListTag list = root.getListOrEmpty("size");
-        if (list.size() >= 3) {
-            return new int[]{list.getIntOr(0, 0), list.getIntOr(1, 0), list.getIntOr(2, 0)};
-        }
-        return new int[]{0, 0, 0};
+        int[] s = readIntTriple(root, "size");
+        return s != null ? s : new int[]{0, 0, 0};
     }
 
     /** Reads a (possibly gzip compressed) NBT file. */

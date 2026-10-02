@@ -61,6 +61,7 @@
   "schematicannon.error.missing": "file not found in the schematics folder",
   "schematicannon.error.invalid": "not a valid .nbt schematic file",
   "schematicannon.error.path": "invalid file name",
+  "schematicannon.error.empty": "no blocks could be parsed (unsupported tag type for blocks[].pos or state)",
   "schematicannon.error.unknown": "unknown error",
   "schematicannon.quill.first": "First corner: %s %s %s",
   "schematicannon.quill.second": "Region: %s x %s x %s",

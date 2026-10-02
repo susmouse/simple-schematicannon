@@ -63,6 +63,7 @@ public final class Messages {
             case "missing" -> Component.translatable("schematicannon.error.missing");
             case "invalid" -> Component.translatable("schematicannon.error.invalid");
             case "path" -> Component.translatable("schematicannon.error.path");
+            case "empty" -> Component.translatable("schematicannon.error.empty");
             default -> Component.literal(code);
         };
     }
