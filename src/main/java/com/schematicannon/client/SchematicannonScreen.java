@@ -3,6 +3,7 @@ package com.schematicannon.client;
 import com.schematicannon.blockentity.SchematicannonBlockEntity;
 import com.schematicannon.menu.SchematicannonMenu;
 import com.schematicannon.network.ModNetwork;
+import com.schematicannon.schematic.SchematicTransform;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.core.BlockPos;
 import net.minecraft.client.gui.components.Button;
@@ -39,7 +40,7 @@ public class SchematicannonScreen extends AbstractContainerScreen<Schematicannon
     private String loadedName = "";
 
     public SchematicannonScreen(SchematicannonMenu menu, Inventory inventory, Component title) {
-        super(menu, inventory, title, 200, 346);
+        super(menu, inventory, title, 200, 364);
         this.titleLabelX = 8;
         this.titleLabelY = 6;
         this.inventoryLabelX = 8;
@@ -92,6 +93,10 @@ public class SchematicannonScreen extends AbstractContainerScreen<Schematicannon
 
         this.targetButton = this.addRenderableWidget(Button.builder(Component.empty(),
                 b -> press(SchematicannonMenu.BUTTON_TARGET)).bounds(x + 8, y + 216, 184, 20).build());
+
+        // No rotate/flip buttons here on purpose: orientation belongs to the blueprint and quill.
+        // The quill's menu changes it, and picking a print target with the quill hands the value to
+        // this cannon. Two places to set it would mean two sources of truth that can disagree.
 
         ModNetwork.sendRequestFileList(this.menu.blockPos());
         refreshLabels();
@@ -308,12 +313,26 @@ public class SchematicannonScreen extends AbstractContainerScreen<Schematicannon
         }
     }
 
-    /** One line under the target button, so the quill flow is discoverable from the GUI itself. */
+    /**
+     * The orientation readout under the target button.
+     *
+     * <p>There used to be rotate/flip buttons on this row. They are gone: the quill owns the
+     * orientation and hands it to the cannon when a target is picked, so this screen only reports
+     * what it was given. The value is still shown, because "which way will it be built" is the one
+     * thing a player wants to confirm before pressing start, and the transform travels with the
+     * target rather than being editable here.
+     */
     private void drawTargetHint(GuiGraphicsExtractor graphics, int x, int y) {
         boolean aimed = this.menu.getSyncedData().get(SchematicannonBlockEntity.DATA_TARGET_SET) != 0;
         graphics.text(this.font, Component.translatable(aimed
                         ? "schematicannon.target_hint_set"
                         : "schematicannon.target_hint_unset"),
-                x + 8, y + 238, TEXT, false);
+                x + 8, y + 246, TEXT, false);
+
+        int encoded = this.menu.getSyncedData().get(SchematicannonBlockEntity.DATA_TRANSFORM);
+        SchematicTransform transform = SchematicTransform.decode(encoded);
+        graphics.text(this.font, Component.translatable("schematicannon.transform_value",
+                        transform.describe(), transform.compass()),
+                x + 8, y + 258, TEXT, false);
     }
 }

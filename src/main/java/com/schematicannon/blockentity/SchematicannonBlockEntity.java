@@ -2,6 +2,7 @@ package com.schematicannon.blockentity;
 
 import com.schematicannon.ModRegistry;
 import com.schematicannon.schematic.Schematic;
+import com.schematicannon.schematic.SchematicTransform;
 import com.schematicannon.util.IntArrayContainerData;
 import com.schematicannon.util.Messages;
 import com.schematicannon.util.NeighbourInventory;
@@ -66,7 +67,9 @@ public class SchematicannonBlockEntity extends BlockEntity implements MenuProvid
     public static final int DATA_TARGET_X = 11;
     public static final int DATA_TARGET_Y = 12;
     public static final int DATA_TARGET_Z = 13;
-    public static final int DATA_COUNT = 14;
+    /** Encoded {@link SchematicTransform}: rotation in the low two bits, mirror as bit 2. */
+    public static final int DATA_TRANSFORM = 14;
+    public static final int DATA_COUNT = 15;
 
     public static final int STATUS_NO_SCHEMATIC = 0;
     public static final int STATUS_READY = 1;
@@ -96,6 +99,8 @@ public class SchematicannonBlockEntity extends BlockEntity implements MenuProvid
     /** Where to print, set with the quill in target mode. Null means "one block above the cannon". */
     @Nullable
     private BlockPos printTarget;
+    /** Rotation and mirror applied to the schematic while printing. */
+    private SchematicTransform transform = SchematicTransform.IDENTITY;
 
     private int cursor;
     private int placedCount;
@@ -303,7 +308,8 @@ public class SchematicannonBlockEntity extends BlockEntity implements MenuProvid
     /** Pushes the ghost preview of the pending blocks to every client watching this cannon. */
     private void broadcastPreview() {
         if (level instanceof net.minecraft.server.level.ServerLevel server) {
-            com.schematicannon.network.ModNetwork.broadcastPreview(server, getBlockPos(), schematic, origin());
+            com.schematicannon.network.ModNetwork.broadcastPreview(
+                    server, getBlockPos(), schematic, origin(), transform);
         }
     }
 
@@ -401,9 +407,24 @@ public class SchematicannonBlockEntity extends BlockEntity implements MenuProvid
         }
         List<Schematic.Placement> blocks = schematic.blocks();
         Schematic.Placement placement = blocks.get(cursor);
+        return place(placement);
+    }
 
-        BlockPos target = origin().offset(placement.x(), placement.y(), placement.z());
-        BlockState wanted = placement.state();
+    /**
+     * Places one entry of the schematic at its transformed position. Split out of {@link #placeNext()}
+     * so the cursor handling stays readable.
+     */
+    private boolean place(Schematic.Placement placement) {
+        if (level == null) {
+            return false;
+        }
+        int[] offset = transform.applyToOffset(placement.x(), placement.z(), schematic.sizeX(), schematic.sizeZ());
+        BlockPos target = origin().offset(offset[0], placement.y(), offset[1]);
+        BlockState wanted = transform.transformState(placement.state());
+        if (wanted == null) {
+            cursor++;
+            return true;
+        }
 
         if (wanted.isAir() && isIgnoringAir()) {
             cursor++;
@@ -643,8 +664,8 @@ public class SchematicannonBlockEntity extends BlockEntity implements MenuProvid
         if (printTarget != null) {
             return printTarget;
         }
-        int sx = schematic == null ? 0 : schematic.sizeX();
-        int sz = schematic == null ? 0 : schematic.sizeZ();
+        int sx = schematic == null ? 0 : transform.transformedSizeX(schematic.sizeX(), schematic.sizeZ());
+        int sz = schematic == null ? 0 : transform.transformedSizeZ(schematic.sizeX(), schematic.sizeZ());
         return getBlockPos().offset(-(sx / 2), 1, -(sz / 2));
     }
 
@@ -662,6 +683,52 @@ public class SchematicannonBlockEntity extends BlockEntity implements MenuProvid
         setChanged();
         broadcastPreview();
     }
+
+    // -------------------------------------------------------------- transform
+
+    public SchematicTransform getTransform() {
+        return transform;
+    }
+
+    /**
+     * Installs a new orientation. Printing always restarts from the beginning, because every already
+     * placed block sits at a coordinate the new transform no longer maps to - continuing would litter
+     * the world with the leftovers of the old orientation.
+     *
+     * <p>Setting the value it already has is a no-op. That matters because the quill hands its
+     * orientation over on every target click, and a repeated identical value must not keep wiping a
+     * running job's progress.
+     */
+    public void setTransform(SchematicTransform value, @Nullable Player player) {
+        SchematicTransform next = value == null ? SchematicTransform.IDENTITY : value;
+        if (next.equals(this.transform)) {
+            return;
+        }
+        this.transform = next;
+        synced.set(DATA_TRANSFORM, this.transform.encode());
+        boolean wasRunning = running;
+        if (wasRunning) {
+            running = false;
+        }
+        resetProgress();
+        // The ghost preview carries the transform with it, so it has to be re-sent - otherwise the
+        // client keeps drawing the previous orientation until something else happens to broadcast.
+        broadcastPreview();
+        setChanged();
+        if (player != null) {
+            notify(Component.translatable(wasRunning
+                            ? "schematicannon.msg.transform_stopped"
+                            : "schematicannon.msg.transform",
+                    this.transform.describe(), this.transform.compass()),
+                    "transform:" + this.transform.encode(), player);
+        }
+    }
+
+    // There are deliberately no rotate/flip convenience methods here. Orientation is owned by the
+    // blueprint and quill: the quill's menu edits it and {@link #setTransform} is the single way it
+    // reaches this block. Convenience wrappers existed only for the cannon's own GUI buttons, which
+    // have been removed so the two cannot disagree about which way the structure is going to be
+    // built.
 
     // ---------------------------------------------------------- chat reporting
 
@@ -755,6 +822,7 @@ public class SchematicannonBlockEntity extends BlockEntity implements MenuProvid
             output.putIntArray("PrintTarget",
                     new int[]{printTarget.getX(), printTarget.getY(), printTarget.getZ()});
         }
+        output.putInt("Transform", transform.encode());
         for (int i = 0; i < DATA_COUNT; i++) {
             output.putInt("Sync" + i, synced.get(i));
         }
@@ -780,6 +848,7 @@ public class SchematicannonBlockEntity extends BlockEntity implements MenuProvid
             this.printTarget = null;
         }
         setPrintTarget(printTarget);
+        this.transform = SchematicTransform.decode(input.getIntOr("Transform", 0));
         for (int i = 0; i < DATA_COUNT; i++) {
             synced.set(i, input.getIntOr("Sync" + i, synced.get(i)));
         }

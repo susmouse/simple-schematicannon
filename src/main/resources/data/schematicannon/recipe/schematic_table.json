@@ -1,0 +1,18 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "group": "schematicannon",
+  "key": {
+    "W": "minecraft:crafting_table",
+    "S": "minecraft:stick",
+    "P": "#minecraft:planks"
+  },
+  "pattern": [
+    "SSP",
+    "SSP",
+    "  W"
+  ],
+  "result": {
+    "id": "schematicannon:schematic_table"
+  }
+}

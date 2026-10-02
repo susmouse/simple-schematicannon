@@ -104,7 +104,7 @@ public final class SchematicPreview {
     }
 
     /** Installs (or, with an empty array, removes) the preview for one cannon. */
-    public static void set(BlockPos pos, long[] packed, int[] stateIds) {
+    public static void set(BlockPos pos, long[] packed, int[] stateIds, int transform) {
         if (packed.length == 0 || stateIds.length != packed.length) {
             PREVIEWS.remove(pos);
             return;
@@ -125,7 +125,7 @@ public final class SchematicPreview {
             PREVIEWS.remove(pos);
             return;
         }
-        PREVIEWS.put(pos, new Preview(cubes.toArray(new Cube[0]), occupied));
+        PREVIEWS.put(pos, new Preview(cubes.toArray(new Cube[0]), occupied, transform));
     }
 
     /**
@@ -335,6 +335,6 @@ public final class SchematicPreview {
     private record Cube(int x, int y, int z, BlockState state) {
     }
 
-    private record Preview(Cube[] cubes, Set<Long> occupied) {
+    private record Preview(Cube[] cubes, Set<Long> occupied, int transform) {
     }
 }

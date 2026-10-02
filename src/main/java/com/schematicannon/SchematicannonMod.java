@@ -33,6 +33,9 @@ public class SchematicannonMod {
                     .addListener(com.schematicannon.client.ClientHooks::onClientTick);
             net.neoforged.neoforge.common.NeoForge.EVENT_BUS
                     .addListener(com.schematicannon.client.ClientHooks::onLoggedOut);
+            // R / T rotate and F mirrors the held quill's print orientation.
+            net.neoforged.neoforge.common.NeoForge.EVENT_BUS
+                    .addListener(com.schematicannon.client.ClientHooks::onKeyInput);
         }
     }
 }

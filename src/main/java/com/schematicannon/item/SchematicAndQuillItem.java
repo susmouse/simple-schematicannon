@@ -1,6 +1,7 @@
 package com.schematicannon.item;
 
 import com.schematicannon.blockentity.SchematicannonBlockEntity;
+import com.schematicannon.schematic.SchematicTransform;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.component.DataComponents;
@@ -41,6 +42,8 @@ public class SchematicAndQuillItem extends Item {
     public static final String KEY_TARGET = "TargetPos";
     /** Last cannon this quill aimed, so later clicks re-aim it without walking back. */
     public static final String KEY_BOUND = "BoundCannon";
+    /** Orientation the quill hands to the cannon: rotation in the low bits, mirror as bit 2. */
+    public static final String KEY_TRANSFORM = "Transform";
 
     public enum Mode {
         SELECT, TARGET
@@ -65,18 +68,25 @@ public class SchematicAndQuillItem extends Item {
                 tag.putInt(KEY_MODE, mode == Mode.TARGET ? 1 : 0));
     }
 
-    /** Right clicking the air flips between marking a region and aiming a cannon. */
+    /**
+     * Right clicking the air opens the control panel, where the mode and the print orientation are
+     * chosen from buttons instead of a hidden keyboard shortcut.
+     *
+     * <p>The menu is opened on the <b>server</b> (the return value below is what triggers it), so the
+     * client screen and the server's copy of the item leave the same state behind. The earlier design
+     * toggled the mode straight from {@code use} and handled orientation with client side keys, which
+     * desynced: the server kept a stale transform and only the first change ever seemed to apply.
+     */
     @Override
     public InteractionResult use(Level level, Player player, InteractionHand hand) {
-        ItemStack stack = player.getItemInHand(hand);
-        Mode next = getMode(stack) == Mode.TARGET ? Mode.SELECT : Mode.TARGET;
-        setMode(stack, next);
-        if (!level.isClientSide()) {
-            player.sendSystemMessage(Component.translatable(next == Mode.TARGET
-                    ? "schematicannon.quill.mode_target"
-                    : "schematicannon.quill.mode_select"));
+        if (level.isClientSide() || !(player instanceof net.minecraft.server.level.ServerPlayer serverPlayer)) {
+            return InteractionResult.SUCCESS;
         }
-        return InteractionResult.SUCCESS;
+        int ordinal = hand == InteractionHand.OFF_HAND ? 1 : 0;
+        serverPlayer.openMenu(new net.minecraft.world.SimpleMenuProvider(
+                (id, inventory, p) -> new com.schematicannon.menu.QuillMenu(id, inventory, ordinal),
+                Component.translatable("schematicannon.quill.menu.title")));
+        return InteractionResult.CONSUME;
     }
 
     // ------------------------------------------------------------------ targeting
@@ -102,6 +112,13 @@ public class SchematicAndQuillItem extends Item {
             }
             return;
         }
+        // Orientation first, then the position. Both trigger a preview broadcast, and doing it in this
+        // order means the last broadcast already carries the new orientation - the position packet is
+        // the one the player sees settle.
+        //
+        // Do not swap these: setPrintTarget broadcasts immediately, so applying the transform after
+        // it would leave the client showing the preview built from the previous orientation.
+        cannon.setTransform(getTransform(stack), player);
         cannon.setPrintTarget(point);
         setBoundCannon(stack, cannon.getBlockPos());
         if (player != null) {
@@ -144,6 +161,9 @@ public class SchematicAndQuillItem extends Item {
             BlockPos bound = getBoundCannon(stack);
             if (bound != null && level.getBlockEntity(bound) instanceof SchematicannonBlockEntity cannon) {
                 if (server) {
+                    // Same order as bindTarget: orientation before position, so the final preview
+                    // broadcast carries both.
+                    cannon.setTransform(getTransform(stack), null);
                     cannon.setPrintTarget(point);
                 }
                 announce(context, "schematicannon.quill.target_set",
@@ -276,6 +296,47 @@ public class SchematicAndQuillItem extends Item {
         });
     }
 
+    // --------------------------------------------------------------- orientation
+
+    /** Orientation this quill will hand over. Kept on the item so the player can set it up first. */
+    public static SchematicTransform getTransform(ItemStack stack) {
+        return stack.isEmpty() ? SchematicTransform.IDENTITY
+                : SchematicTransform.decode(tag(stack).getInt(KEY_TRANSFORM).orElse(0));
+    }
+
+    public static SchematicTransform setTransform(ItemStack stack, SchematicTransform transform) {
+        int encoded = (transform == null ? SchematicTransform.IDENTITY : transform).encode();
+        CustomData.update(DataComponents.CUSTOM_DATA, stack, tag -> tag.putInt(KEY_TRANSFORM, encoded));
+        return transform;
+    }
+
+    /** Turns the stored orientation one quarter turn. */
+    public static SchematicTransform rotate(ItemStack stack, boolean clockwise) {
+        SchematicTransform next = clockwise ? getTransform(stack).rotateClockwise()
+                : getTransform(stack).rotateCounterClockwise();
+        return setTransform(stack, next);
+    }
+    /** Mirrors the stored orientation horizontally. */
+    public static SchematicTransform flip(ItemStack stack) {
+        return setTransform(stack, getTransform(stack).flipped());
+    }
+
+    /** Back to no rotation, no mirror. */
+    public static void resetTransform(ItemStack stack) {
+        setTransform(stack, SchematicTransform.IDENTITY);
+    }
+
+    /**
+     * Which hand holds a quill, for {@link com.schematicannon.network.ModNetwork#sendQuillState}.
+     * Returns -1 when neither hand does.
+     */
+    public static int handOf(Player player) {
+        if (player.getMainHandItem().getItem() instanceof SchematicAndQuillItem) {
+            return 0;
+        }
+        return player.getOffhandItem().getItem() instanceof SchematicAndQuillItem ? 1 : -1;
+    }
+
     @Nullable
     public static BlockPos getBoundCannon(ItemStack stack) {
         return stack.isEmpty() ? null : read(tag(stack), KEY_BOUND);
@@ -303,10 +364,13 @@ public class SchematicAndQuillItem extends Item {
             } else {
                 lines.accept(Component.translatable("schematicannon.tooltip.target_none"));
             }
+            SchematicTransform transform = getTransform(stack);
+            lines.accept(Component.translatable("schematicannon.tooltip.transform",
+                    transform.describe(), transform.compass()));
+            lines.accept(Component.translatable("schematicannon.tooltip.transform_keys"));
             return;
         }
-        lines.accept(Component.translatable("schematicannon.tooltip.mode_select"));
-        BlockPos a = getFirstPos(stack);
+        lines.accept(Component.translatable("schematicannon.tooltip.mode_select"));        BlockPos a = getFirstPos(stack);
         BlockPos b = getSecondPos(stack);
         if (a != null && b != null) {
             int x = Math.abs(b.getX() - a.getX()) + 1;

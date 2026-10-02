@@ -1,0 +1,17 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "group": "schematicannon",
+  "key": {
+    "B": "minecraft:blue_dye",
+    "P": "minecraft:paper"
+  },
+  "pattern": [
+    "PPB",
+    "PPB",
+    "PPB"
+  ],
+  "result": {
+    "id": "schematicannon:material_list"
+  }
+}

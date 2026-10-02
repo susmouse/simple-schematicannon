@@ -77,6 +77,11 @@ public class SchematicannonMenu extends AbstractContainerMenu {
         if (!(be instanceof SchematicannonBlockEntity cannon)) {
             return false;
         }
+        // Note: there is deliberately no rotate/flip button here. Orientation is owned by the
+        // blueprint and quill - the quill's own menu sets it, and the value is handed to the cannon
+        // when the quill is used to pick a print target. Duplicating it on the cannon would give two
+        // competing sources of truth and let a player rotate the ghost of a cannon that is about to
+        // receive a different orientation from the quill.
         switch (id) {
             case BUTTON_START_STOP -> cannon.setRunning(!cannon.isRunning(), player);
             case BUTTON_IGNORE_AIR -> cannon.setOption(SchematicannonBlockEntity.OPT_IGNORE_AIR, !cannon.isIgnoringAir());

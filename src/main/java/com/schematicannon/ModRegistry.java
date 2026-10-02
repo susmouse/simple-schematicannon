@@ -6,6 +6,7 @@ import com.schematicannon.blockentity.SchematicTableBlockEntity;
 import com.schematicannon.blockentity.SchematicannonBlockEntity;
 import com.schematicannon.item.MaterialListItem;
 import com.schematicannon.item.SchematicAndQuillItem;
+import com.schematicannon.menu.QuillMenu;
 import com.schematicannon.menu.SchematicTableMenu;
 import com.schematicannon.menu.SchematicannonMenu;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -83,6 +84,11 @@ public final class ModRegistry {
 
     public static final DeferredHolder<MenuType<?>, MenuType<SchematicTableMenu>> SCHEMATIC_TABLE_MENU =
             MENU_TYPES.register("schematic_table", () -> new MenuType<>(SchematicTableMenu::createClientMenu,
+                    FeatureFlags.VANILLA_SET));
+
+    /** Item held menu for the blueprint and quill; opened by right clicking the air. */
+    public static final DeferredHolder<MenuType<?>, MenuType<QuillMenu>> QUILL_MENU =
+            MENU_TYPES.register("quill", () -> new MenuType<>(QuillMenu::createClientMenu,
                     FeatureFlags.VANILLA_SET));
 
     // ------------------------------------------------------------- creative tab
