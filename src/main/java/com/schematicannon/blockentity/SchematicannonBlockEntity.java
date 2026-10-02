@@ -27,6 +27,9 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.BedPart;
+import net.minecraft.world.level.block.state.properties.BlockStateProperties;
+import net.minecraft.world.level.block.state.properties.DoubleBlockHalf;
 import net.minecraft.world.level.storage.TagValueInput;
 import net.minecraft.world.level.storage.ValueInput;
 import net.minecraft.world.level.storage.ValueOutput;
@@ -431,6 +434,14 @@ public class SchematicannonBlockEntity extends BlockEntity implements MenuProvid
             return true;
         }
 
+        // Door / bed / tall plant: the second position is filled in by vanilla when the first one
+        // is placed, so it must not consume a second item. Checked before the occupancy test below
+        // so a blocked second half is not reported as a blocked block either.
+        if (!needsOwnItem(wanted)) {
+            cursor++;
+            return true;
+        }
+
         BlockState existing = level.getBlockState(target);
         boolean targetFree = existing.isAir() || existing.canBeReplaced();
         if (!targetFree && !isReplacingBlocks()) {
@@ -518,6 +529,29 @@ public class SchematicannonBlockEntity extends BlockEntity implements MenuProvid
 
     // ------------------------------------------------------------ material list
 
+    /**
+     * Whether this block state needs its own item when the structure is built.
+     * <p>
+     * Doors, tall flowers/grass, and beds are stored as <em>two</em> block positions in the
+     * schematic, but only one of them is actually placed with an item - placing the lower half
+     * (or the bed foot) makes vanilla populate the other half for free. The upper half / bed head
+     * must therefore be skipped both when consuming materials and when counting the list,
+     * otherwise a single door would ask for two doors.
+     * <p>
+     * This mirrors Create's {@code shouldIgnoreBlockState}.
+     */
+    private static boolean needsOwnItem(BlockState state) {
+        if (state.hasProperty(BlockStateProperties.DOUBLE_BLOCK_HALF)
+                && state.getValue(BlockStateProperties.DOUBLE_BLOCK_HALF) == DoubleBlockHalf.UPPER) {
+            return false;
+        }
+        if (state.hasProperty(BlockStateProperties.BED_PART)
+                && state.getValue(BlockStateProperties.BED_PART) == BedPart.HEAD) {
+            return false;
+        }
+        return true;
+    }
+
     /** How many of {@code item} the cannon and its neighbouring inventories can supply. */
     public int countAvailable(Item item) {
         int total = 0;
@@ -541,6 +575,10 @@ public class SchematicannonBlockEntity extends BlockEntity implements MenuProvid
         for (int i = cursor; i < blocks.size(); i++) {
             BlockState state = blocks.get(i).state();
             if (state.isAir()) {
+                continue;
+            }
+            // A door / bed / tall plant occupies two positions but only costs one item.
+            if (!needsOwnItem(state)) {
                 continue;
             }
             Item item = state.getBlock().asItem();
