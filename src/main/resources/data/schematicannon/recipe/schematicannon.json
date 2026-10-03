@@ -4,7 +4,7 @@
   "group": "schematicannon",
   "key": {
     "L": "#minecraft:logs",
-    "C": "minecraft:coal_block",
+    "C": "minecraft:smooth_stone",
     "R": "minecraft:redstone_block"
   },
   "pattern": [
